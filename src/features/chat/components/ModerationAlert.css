@@ -1,0 +1,111 @@
+.moderation-alert {
+  margin: 1rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 1rem;
+  padding: 1.25rem;
+  display: flex;
+  gap: 1rem;
+  box-shadow: 0 4px 20px rgba(239, 68, 68, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.moderation-alert::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: var(--danger);
+  box-shadow: 0 0 10px var(--danger);
+}
+
+.alert-icon-wrapper {
+  flex-shrink: 0;
+  width: 3rem;
+  height: 3rem;
+  background: rgba(239, 68, 68, 0.2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+}
+
+.alert-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  color: #fca5a5;
+  animation: pulse 2s infinite;
+}
+
+.alert-content {
+  flex: 1;
+}
+
+.alert-title {
+  color: #fca5a5;
+  font-size: 0.875rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.25rem;
+}
+
+.alert-text {
+  color: var(--text-primary);
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.4;
+}
+
+.alert-detail {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+}
+
+.alert-detail .highlight {
+  color: var(--warning);
+  background: rgba(245, 158, 11, 0.2);
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.25rem;
+  font-weight: bold;
+}
+
+.alert-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.btn-action {
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-action.continue {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--glass-border);
+}
+
+.btn-action.continue:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.btn-action.block {
+  background: var(--danger);
+  color: white;
+  border: none;
+}
+
+.btn-action.block:hover {
+  background: #dc2626;
+  box-shadow: 0 0 15px var(--danger-glow);
+}

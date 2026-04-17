@@ -1,0 +1,237 @@
+.face-scanner-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.scanner-header {
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.scanner-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.scanner-desc {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-top: 0.25rem;
+}
+
+.scanner-frame {
+  position: relative;
+  width: 100%;
+  max-width: 24rem;
+  aspect-ratio: 3/4;
+  border-radius: 1.5rem;
+  overflow: hidden;
+  box-shadow: 0 0 25px rgba(14, 165, 233, 0.15);
+  border: 1px solid rgba(14, 165, 233, 0.3);
+  background: #050505;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.webcam-view {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity 0.5s ease, filter 0.5s ease;
+  transform: scaleX(-1); /* Mirror effect for webcam */
+}
+
+.webcam-view.processing {
+  opacity: 0.4;
+  filter: grayscale(100%) blur(4px);
+}
+
+.scanner-canvas.digital-mask-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover; /* This is crucial to match the webcam's cropping */
+  pointer-events: none;
+  z-index: 15;
+  transform: scaleX(-1); /* Needs to mirror the camera feed */
+}
+
+.scanner-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  z-index: 15;
+}
+
+.processing-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  z-index: 20;
+}
+
+.spinner {
+  width: 3.5rem;
+  height: 3.5rem;
+  border: 3px solid var(--secondary);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  box-shadow: 0 0 20px rgba(34, 211, 238, 0.5);
+}
+
+.init-spinner {
+  border-color: rgba(14, 165, 233, 0.5);
+  border-top-color: transparent;
+  box-shadow: 0 0 20px rgba(14, 165, 233, 0.4);
+}
+
+.processing-text {
+  margin-top: 1.5rem;
+  color: var(--secondary);
+  font-size: 0.875rem;
+  letter-spacing: 0.15em;
+  font-weight: 700;
+  animation: pulse 2s infinite;
+}
+
+.scan-status-container {
+  margin-top: 1.5rem;
+  width: 100%;
+  max-width: 24rem;
+  height: 3rem;
+}
+
+.status-placeholder {
+  height: 100%;
+}
+
+.status-text {
+  font-size: 0.75rem;
+  color: var(--secondary);
+  margin-bottom: 0.5rem;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.progress-bar-bg {
+  width: 100%;
+  height: 6px;
+  background: rgba(30, 41, 59, 0.8);
+  border-radius: 3px;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+}
+
+.progress-bar-fill {
+  height: 100%;
+  transition: width 0.1s ease-out, background-color 0.3s;
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.5);
+}
+
+.error-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(12px);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  animation: fade-in 0.3s ease-out forwards;
+}
+
+.error-icon {
+  color: var(--danger);
+  margin-bottom: 1rem;
+  animation: pulse-danger 2s infinite;
+}
+
+.error-overlay-text {
+  color: var(--danger);
+  font-size: 0.875rem;
+  letter-spacing: 0.1em;
+  margin-bottom: 2rem;
+}
+
+.btn-retry {
+  padding: 0.75rem 2rem;
+  border-radius: 9999px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  font-weight: bold;
+  letter-spacing: 0.05em;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-retry:hover {
+  background: rgba(239, 68, 68, 0.2);
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+  transform: translateY(-2px);
+}
+
+@keyframes pulse-danger {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.1); }
+}
+
+/* ── Scan corner decorations ───────────────────────────────────────────────── */
+.scan-corner {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  z-index: 16;
+  pointer-events: none;
+}
+
+.scan-corner.top-left    { top: 10px;    left: 10px;    border-top: 2px solid var(--primary);  border-left: 2px solid var(--primary);  }
+.scan-corner.top-right   { top: 10px;    right: 10px;   border-top: 2px solid var(--primary);  border-right: 2px solid var(--primary); }
+.scan-corner.bottom-left { bottom: 10px; left: 10px;    border-bottom: 2px solid var(--primary); border-left: 2px solid var(--primary);  }
+.scan-corner.bottom-right{ bottom: 10px; right: 10px;   border-bottom: 2px solid var(--primary); border-right: 2px solid var(--primary); }
+
+/* ── Scan line animation ───────────────────────────────────────────────────── */
+.scan-line {
+  position: absolute;
+  left: 5%;
+  width: 90%;
+  height: 2px;
+  background: linear-gradient(to right, transparent, var(--secondary), transparent);
+  box-shadow: 0 0 12px var(--secondary-glow);
+  z-index: 16;
+  pointer-events: none;
+  animation: scan-sweep 2s ease-in-out infinite;
+}
+
+@keyframes scan-sweep {
+  0%   { top: 10%; opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { top: 90%; opacity: 0; }
+}

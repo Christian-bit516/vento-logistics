@@ -1,95 +1,196 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import FaceScannerPro from './FaceScannerPro';
 import { useBiometricAuth } from '../hooks/useBiometricAuth';
+import './AdvancedLoginForm.css';
+
+// ─── Result screens ───────────────────────────────────────────────────────────
+
+const SuccessScreen = ({ mode, confidenceScore, onContinueToLogin }) => (
+  <div className="result-screen animate-fade-in">
+    <div className="result-icon-wrap success-glow">
+      <svg className="result-icon success-color" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+      </svg>
+    </div>
+    <h3 className="result-title success-color mono">
+      {mode === 'register' ? 'IDENTIDAD REGISTRADA' : 'ACCESO CONCEDIDO'}
+    </h3>
+    <p className="result-subtitle">
+      {mode === 'register'
+        ? 'Su biometría fue guardada exitosamente en la red Vento.'
+        : <>Match biométrico verificado: <span className="score-highlight">{confidenceScore}%</span></>}
+    </p>
+
+    {mode === 'register' ? (
+      <button className="btn-primary result-btn" onClick={onContinueToLogin}>
+        CONTINUAR → INICIAR SESIÓN
+      </button>
+    ) : (
+      <p className="result-hint mono">Redirigiendo a la plataforma...</p>
+    )}
+  </div>
+);
+
+const UnrecognizedScreen = ({ onGoToRegister, onRetry }) => (
+  <div className="result-screen animate-fade-in">
+    <div className="result-icon-wrap danger-glow">
+      <svg className="result-icon danger-color" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      </svg>
+    </div>
+    <h3 className="result-title danger-color mono">ROSTRO NO RECONOCIDO</h3>
+    <p className="result-subtitle">
+      Este rostro no tiene cuenta en la red Vento.<br />
+      ¿Desea crear una cuenta nueva?
+    </p>
+    <div className="result-actions">
+      <button className="btn-primary result-btn" onClick={onGoToRegister}>
+        IR A REGISTRO
+      </button>
+      <button className="back-btn" onClick={onRetry}>
+        REINTENTAR ESCANEO
+      </button>
+    </div>
+  </div>
+);
+
+// ─── Main component ───────────────────────────────────────────────────────────
 
 const AdvancedLoginForm = () => {
-  const [view, setView] = useState('selector'); // selector, biometric, credentials
-  const { status, errorMsg, confidenceScore, processBiometrics, startScanning, cancelScanning } = useBiometricAuth();
+  const [activeTab, setActiveTab] = useState('register');
+  // Keep a ref of activeTab so handleCapture never reads a stale value
+  const activeTabRef = useRef('register');
 
-  const handleCapture = async (base64) => {
-    const success = await processBiometrics(base64);
-    if (success) {
-      setTimeout(() => {
-        console.log('[Sistema] Redirigiendo al Socket del Chat P2P...');
-        // window.location.href = '/dashboard';
-      }, 1500);
+  const {
+    status,
+    errorMsg,
+    confidenceScore,
+    successMode,
+    modelsReady,
+    registerFace,
+    loginFace,
+    resetToReady,
+  } = useBiometricAuth();
+
+  // ── Tab switch ────────────────────────────────────────────────────────────
+  const switchTab = useCallback((tab) => {
+    setActiveTab(tab);
+    activeTabRef.current = tab;
+    resetToReady();
+  }, [resetToReady]);
+
+  // ── Capture handler (called by FaceScannerPro when progress hits 100%) ───
+  const handleCapture = useCallback(async (base64) => {
+    // Read current tab from ref — avoids stale closure
+    const currentTab = activeTabRef.current;
+
+    if (currentTab === 'register') {
+      const result = await registerFace(base64);
+      // 'no_face' → hook already reset status to 'ready', scanner will retry naturally
+      if (result?.success) {
+        // Auto-redirect to login after register success is shown for 3 s
+        // (user can also click the button manually)
+      }
+    } else {
+      const result = await loginFace(base64);
+      if (result?.success) {
+        // Give user 2 s to see the success screen before redirect
+        setTimeout(() => { window.location.href = '/chat'; }, 2500);
+      }
+      // 'no_face' → hook already reset to 'ready'
+      // 'unrecognized' | 'error' | 'no_users' → hook set status accordingly
     }
-  };
+  }, [registerFace, loginFace]);
 
-  const renderSuccess = () => (
-    <div className="flex flex-col items-center p-8 space-y-4 animate-in fade-in zoom-in duration-500">
-      <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center border border-green-500 shadow-[0_0_30px_rgba(34,197,94,0.4)]">
-        <svg className="w-10 h-10 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-      </div>
-      <h3 className="text-xl font-bold text-green-400 font-mono">ACCESO CONCEDIDO</h3>
-      <p className="text-gray-400 text-sm">Match biométrico: <span className="text-green-400">{confidenceScore}%</span></p>
-    </div>
-  );
+  // ── After register success → move to login tab ────────────────────────────
+  const handleContinueToLogin = useCallback(() => {
+    switchTab('login');
+  }, [switchTab]);
+
+  // ── Go to register from unrecognized screen ───────────────────────────────
+  const handleGoToRegister = useCallback(() => {
+    switchTab('register');
+  }, [switchTab]);
+
+  // ── Derived display booleans ──────────────────────────────────────────────
+  const showScanner    = status !== 'success' && status !== 'unrecognized';
+  const isProcessing   = status === 'processing';
+  const hasError       = status === 'error';
 
   return (
-    <div className="w-full max-w-lg mx-auto bg-gray-900/80 backdrop-blur-xl border border-gray-800 rounded-3xl p-8 shadow-2xl relative overflow-hidden">
-      {/* Efecto de luz de fondo */}
-      <div className="absolute -top-20 -left-20 w-64 h-64 bg-blue-600/20 rounded-full blur-3xl pointer-events-none"></div>
-      <div className="absolute -bottom-20 -right-20 w-64 h-64 bg-cyan-600/20 rounded-full blur-3xl pointer-events-none"></div>
+    <div className="advanced-login-form glass-panel">
+      <div className="form-content">
 
-      <div className="relative z-10">
-        <div className="text-center mb-10">
-          <h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400 tracking-tight">
-            VENTO <span className="font-light text-white">ID</span>
-          </h2>
-          <p className="text-gray-400 mt-2 text-sm uppercase tracking-widest">Protocolo de Seguridad P2P</p>
+        {/* ── Header ── */}
+        <div className="form-header">
+          <h2 className="title">VENTO <span className="title-light">ID</span></h2>
+          <p className="subtitle mono">Protocolo de Seguridad Biométrica P2P</p>
         </div>
 
+        {/* ── Tabs ── */}
+        <div className="auth-mode-tabs">
+          <button
+            id="tab-register"
+            className={`tab-btn${activeTab === 'register' ? ' active' : ''}`}
+            onClick={() => switchTab('register')}
+          >
+            <span className="tab-number">01</span>
+            <span className="tab-label">REGISTRO</span>
+          </button>
+          <button
+            id="tab-login"
+            className={`tab-btn${activeTab === 'login' ? ' active' : ''}`}
+            onClick={() => switchTab('login')}
+          >
+            <span className="tab-number">02</span>
+            <span className="tab-label">INICIAR SESIÓN</span>
+          </button>
+        </div>
+
+        {/* ── Content ── */}
         {status === 'success' ? (
-          renderSuccess()
+          <SuccessScreen
+            mode={successMode}
+            confidenceScore={confidenceScore}
+            onContinueToLogin={handleContinueToLogin}
+          />
+        ) : status === 'unrecognized' ? (
+          <UnrecognizedScreen
+            onGoToRegister={handleGoToRegister}
+            onRetry={resetToReady}
+          />
         ) : (
-          <div className="space-y-6">
+          <div className="form-body">
+
+            {/* Error banner */}
             {errorMsg && (
-              <div className="bg-red-500/10 border border-red-500/50 text-red-400 p-4 rounded-xl text-sm font-mono animate-pulse">
-                [ERR] {errorMsg}
+              <div className="error-box mono animate-fade-in">
+                <span className="error-prefix">[ERR]</span>
+                <span className="error-text">{errorMsg}</span>
+                <button className="error-dismiss" onClick={resetToReady} title="Cerrar">✕</button>
               </div>
             )}
 
-            {view === 'selector' && (
-              <div className="grid gap-4">
-                <button onClick={() => { setView('biometric'); startScanning(); }} className="flex items-center justify-between p-4 bg-gray-800/50 border border-gray-700 hover:border-cyan-500 rounded-xl group transition-all">
-                  <span className="text-gray-300 font-medium group-hover:text-cyan-400">Reconocimiento Facial IA</span>
-                  <span className="w-8 h-8 rounded-full bg-cyan-500/10 flex items-center justify-center text-cyan-400 group-hover:shadow-[0_0_10px_rgba(0,255,255,0.5)]">👁</span>
-                </button>
-                <button onClick={() => setView('credentials')} className="flex items-center justify-between p-4 bg-gray-800/50 border border-gray-700 hover:border-blue-500 rounded-xl group transition-all">
-                  <span className="text-gray-300 font-medium group-hover:text-blue-400">Credenciales Clásicas</span>
-                  <span className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400">⌨</span>
-                </button>
+            {/* Models still loading notice */}
+            {!modelsReady && !errorMsg && (
+              <div className="info-box mono animate-fade-in">
+                <span className="info-prefix">[IA]</span>
+                <span> Cargando modelos de reconocimiento facial...</span>
               </div>
             )}
 
-            {view === 'biometric' && (
-              <div className="animate-in fade-in duration-300">
-                <FaceScannerPro onCapture={handleCapture} isProcessing={status === 'processing'} />
-                <button onClick={() => { setView('selector'); cancelScanning(); }} className="w-full mt-6 text-sm text-gray-500 hover:text-white transition-colors">
-                  ← Volver a métodos de acceso
-                </button>
-              </div>
-            )}
-
-            {view === 'credentials' && (
-              <form className="space-y-5 animate-in slide-in-from-right-4 duration-300" onSubmit={e => e.preventDefault()}>
-                <div>
-                  <input type="email" placeholder="ID de Usuario / Email" className="w-full bg-gray-950 border border-gray-800 text-gray-200 p-4 rounded-xl focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition" />
-                </div>
-                <div>
-                  <input type="password" placeholder="Clave de Acceso" className="w-full bg-gray-950 border border-gray-800 text-gray-200 p-4 rounded-xl focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition" />
-                </div>
-                <button className="w-full py-4 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold rounded-xl shadow-[0_0_15px_rgba(59,130,246,0.5)] transition-all">
-                  INICIAR SESIÓN
-                </button>
-                <button type="button" onClick={() => setView('selector')} className="w-full text-sm text-gray-500 hover:text-white transition-colors">
-                  ← Volver a métodos de acceso
-                </button>
-              </form>
-            )}
+            {/* Biometric scanner */}
+            <FaceScannerPro
+              onCapture={handleCapture}
+              isProcessing={isProcessing}
+              hasError={hasError}
+              onRetry={resetToReady}
+              mode={activeTab}
+            />
           </div>
         )}
+
       </div>
     </div>
   );
