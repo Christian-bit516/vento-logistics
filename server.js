@@ -2,108 +2,138 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(cors());
+app.use(express.json());
+
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: "http://localhost:5173", // Vite default port
+    origin: "http://localhost:5173",
     methods: ["GET", "POST"]
   }
 });
 
-// Mocked Database of reported phone numbers
-const BLACKLISTED_NUMBERS = [
-  "987654321", "123456789", "555123456"
-];
+// Persistent Storage Paths
+const DATA_DIR = path.join(__dirname, 'data');
+const BLACKLIST_FILE = path.join(DATA_DIR, 'blacklist.json');
+const LOGS_FILE = path.join(DATA_DIR, 'logs.json');
 
-// NLP Simulation (Regex for detecting obscured numbers)
+// Ensure data directory exists
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR);
+}
+
+// Initial Data Load
+let BLACKLISTED_NUMBERS = [];
+try {
+  if (fs.existsSync(BLACKLIST_FILE)) {
+    BLACKLISTED_NUMBERS = JSON.parse(fs.readFileSync(BLACKLIST_FILE, 'utf8'));
+  } else {
+    BLACKLISTED_NUMBERS = ["987654321", "123456789", "555123456"];
+    fs.writeFileSync(BLACKLIST_FILE, JSON.stringify(BLACKLISTED_NUMBERS));
+  }
+} catch (e) {
+  console.error("Error loading blacklist:", e);
+}
+
+let systemLogs = [];
+try {
+  if (fs.existsSync(LOGS_FILE)) {
+    systemLogs = JSON.parse(fs.readFileSync(LOGS_FILE, 'utf8'));
+  }
+} catch (e) {
+  console.error("Error loading logs:", e);
+}
+
+const saveLogs = () => {
+  fs.writeFileSync(LOGS_FILE, JSON.stringify(systemLogs, null, 2));
+};
+
+const saveBlacklist = () => {
+  fs.writeFileSync(BLACKLIST_FILE, JSON.stringify(BLACKLISTED_NUMBERS, null, 2));
+};
+
+// AI NLP SECURITY LAYER
 const detectPhoneNumber = (text) => {
-  // Simple regex to find sequences of digits, even if separated by spaces or words
-  // e.g., "nueve 8 siete" -> "987"
   const numberWordMap = {
     'cero': '0', 'uno': '1', 'dos': '2', 'tres': '3', 'cuatro': '4',
     'cinco': '5', 'seis': '6', 'siete': '7', 'ocho': '8', 'nueve': '9'
   };
   
   let normalizedText = text.toLowerCase();
+  
+  // Replace words with digits
   for (const [word, digit] of Object.entries(numberWordMap)) {
     normalizedText = normalizedText.replace(new RegExp(word, 'g'), digit);
   }
   
-  // Extract all digits
-  const digits = normalizedText.replace(/\D/g, '');
+  // Remove common camouflage characters
+  const cleanedText = normalizedText.replace(/[\-\.\s\(\)]/g, '');
   
-  // Check if length looks like a phone number (e.g., 9 digits)
-  if (digits.length >= 7) {
-    return { detected: true, digits };
+  // Extract patterns that look like phone numbers (7 to 11 digits)
+  const phonePattern = /\d{7,11}/g;
+  const matches = cleanedText.match(phonePattern);
+  
+  if (matches && matches.length > 0) {
+    return { detected: true, digits: matches[0] };
   }
+  
   return { detected: false, digits: null };
 };
 
-// In-memory logs for Admin Dashboard
-let systemLogs = [];
-
 io.on('connection', (socket) => {
-  console.log('A user connected:', socket.id);
+  console.log('Connected:', socket.id);
 
-  // Join a specific room (e.g., negotiation between user A and courier B)
   socket.on('join_room', (room) => {
     socket.join(room);
-    console.log(`Socket ${socket.id} joined room ${room}`);
   });
 
   socket.on('send_message', (data) => {
-    console.log('Message received:', data);
     const { room, message, sender } = data;
 
-    // AI SECURITY LAYER
+    // AI SECURITY CHECK
     const aiAnalysis = detectPhoneNumber(message);
     
     if (aiAnalysis.detected) {
-      console.warn('⚠️ [AI Alert] Potential phone number detected:', aiAnalysis.digits);
-      
       const isBlacklisted = BLACKLISTED_NUMBERS.includes(aiAnalysis.digits);
       
-      if (isBlacklisted) {
-        // Log the fraud attempt
-        systemLogs.push({
-          id: Date.now().toString(),
-          timestamp: new Date().toISOString(),
-          sender,
-          message,
-          detectedNumber: aiAnalysis.digits,
-          status: 'INTERCEPTED'
-        });
+      const logEntry = {
+        id: Date.now().toString(),
+        timestamp: new Date().toISOString(),
+        sender,
+        message,
+        detectedNumber: aiAnalysis.digits,
+        status: isBlacklisted ? 'INTERCEPTED' : 'SUSPICIOUS_ALLOWED'
+      };
+      
+      systemLogs.unshift(logEntry);
+      if (systemLogs.length > 100) systemLogs.pop(); // Keep last 100
+      saveLogs();
 
-        // Intercept message and alert the receiver
+      if (isBlacklisted) {
         io.to(room).emit('ai_alert', {
           originalMessage: message,
           detectedNumber: aiAnalysis.digits,
-          alertText: "⚠️ Número con reportes. ¿Desea continuar o bloquear a este usuario?",
+          alertText: "⚠️ Número detectado con reportes de fraude previos.",
           sender
         });
-        return; // Stop the message from reaching normally
-      } else {
-        // If it's a number but not blacklisted, we could log it as 'SUSPICIOUS' but still send it.
-        systemLogs.push({
-          id: Date.now().toString(),
-          timestamp: new Date().toISOString(),
-          sender,
-          message,
-          detectedNumber: aiAnalysis.digits,
-          status: 'SUSPICIOUS_ALLOWED'
-        });
+        return; 
       }
     }
 
-    // Standard message delivery
     io.to(room).emit('receive_message', data);
   });
 
   socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
+    console.log('Disconnected:', socket.id);
   });
 });
 
@@ -112,16 +142,24 @@ app.get('/api/logs', (req, res) => {
   res.json(systemLogs);
 });
 
-app.post('/api/blacklist', express.json(), (req, res) => {
+app.post('/api/blacklist', (req, res) => {
   const { number } = req.body;
   if (number && !BLACKLISTED_NUMBERS.includes(number)) {
     BLACKLISTED_NUMBERS.push(number);
-    return res.json({ success: true, message: 'Number added to blacklist' });
+    saveBlacklist();
+    return res.json({ success: true, message: 'Added to blacklist' });
   }
-  res.status(400).json({ success: false, message: 'Invalid or existing number' });
+  res.status(400).json({ success: false, message: 'Invalid or already exists' });
+});
+
+app.delete('/api/logs', (req, res) => {
+  systemLogs = [];
+  saveLogs();
+  res.json({ success: true });
 });
 
 const PORT = 3001;
 httpServer.listen(PORT, () => {
-  console.log(`Backend server running on http://localhost:${PORT}`);
+  console.log(`\x1b[36m%s\x1b[0m`, `[Vento AI Core] Server running on http://localhost:${PORT}`);
 });
+
