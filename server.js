@@ -21,44 +21,60 @@ const io = new Server(httpServer, {
   }
 });
 
-// Persistent Storage Paths
-const DATA_DIR = path.join(__dirname, 'data');
-const BLACKLIST_FILE = path.join(DATA_DIR, 'blacklist.json');
-const LOGS_FILE = path.join(DATA_DIR, 'logs.json');
+import admin from 'firebase-admin';
 
-// Ensure data directory exists
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR);
+// Initialize Firebase Admin
+try {
+  const serviceAccount = JSON.parse(
+    fs.readFileSync(path.join(__dirname, 'back', 'serviceAccountKey.json'), 'utf8')
+  );
+
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
+  });
+  console.log('Firebase Admin initialized successfully.');
+} catch (error) {
+  console.error('Error initializing Firebase Admin:', error);
 }
 
-// Initial Data Load
+const db = admin.firestore();
+
+// Persistent Storage State (Cached locally for blazing fast NLP checks)
 let BLACKLISTED_NUMBERS = [];
-try {
-  if (fs.existsSync(BLACKLIST_FILE)) {
-    BLACKLISTED_NUMBERS = JSON.parse(fs.readFileSync(BLACKLIST_FILE, 'utf8'));
-  } else {
-    BLACKLISTED_NUMBERS = ["987654321", "123456789", "555123456"];
-    fs.writeFileSync(BLACKLIST_FILE, JSON.stringify(BLACKLISTED_NUMBERS));
-  }
-} catch (e) {
-  console.error("Error loading blacklist:", e);
-}
-
 let systemLogs = [];
-try {
-  if (fs.existsSync(LOGS_FILE)) {
-    systemLogs = JSON.parse(fs.readFileSync(LOGS_FILE, 'utf8'));
-  }
-} catch (e) {
-  console.error("Error loading logs:", e);
-}
 
-const saveLogs = () => {
-  fs.writeFileSync(LOGS_FILE, JSON.stringify(systemLogs, null, 2));
+// Sync Blacklist from Firestore in real-time
+db.collection('blacklist').onSnapshot(snapshot => {
+  BLACKLISTED_NUMBERS = snapshot.docs.map(doc => doc.id);
+}, err => console.error('Error syncing blacklist:', err));
+
+// Sync Logs from Firestore in real-time (order by timestamp desc, limit 100)
+db.collection('logs').orderBy('timestamp', 'desc').limit(100).onSnapshot(snapshot => {
+  systemLogs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}, err => console.error('Error syncing logs:', err));
+
+const saveLogToFirestore = async (logEntry) => {
+  try {
+    await db.collection('logs').doc(logEntry.id).set(logEntry);
+  } catch (error) {
+    console.error('Error saving log to Firestore:', error);
+  }
 };
 
-const saveBlacklist = () => {
-  fs.writeFileSync(BLACKLIST_FILE, JSON.stringify(BLACKLISTED_NUMBERS, null, 2));
+const saveBlacklistToFirestore = async (number) => {
+  try {
+    await db.collection('blacklist').doc(number).set({ addedAt: new Date().toISOString() });
+  } catch (error) {
+    console.error('Error saving to blacklist:', error);
+  }
+};
+
+const removeBlacklistFromFirestore = async (number) => {
+  try {
+    await db.collection('blacklist').doc(number).delete();
+  } catch (error) {
+    console.error('Error removing from blacklist:', error);
+  }
 };
 
 // AI NLP SECURITY LAYER
@@ -114,9 +130,7 @@ io.on('connection', (socket) => {
         status: isBlacklisted ? 'INTERCEPTED' : 'SUSPICIOUS_ALLOWED'
       };
       
-      systemLogs.unshift(logEntry);
-      if (systemLogs.length > 100) systemLogs.pop(); // Keep last 100
-      saveLogs();
+      saveLogToFirestore(logEntry);
 
       if (isBlacklisted) {
         io.to(room).emit('ai_alert', {
@@ -142,20 +156,43 @@ app.get('/api/logs', (req, res) => {
   res.json(systemLogs);
 });
 
-app.post('/api/blacklist', (req, res) => {
+app.get('/api/blacklist', (req, res) => {
+  res.json(BLACKLISTED_NUMBERS);
+});
+
+app.post('/api/blacklist', async (req, res) => {
   const { number } = req.body;
   if (number && !BLACKLISTED_NUMBERS.includes(number)) {
-    BLACKLISTED_NUMBERS.push(number);
-    saveBlacklist();
+    await saveBlacklistToFirestore(number);
     return res.json({ success: true, message: 'Added to blacklist' });
   }
   res.status(400).json({ success: false, message: 'Invalid or already exists' });
 });
 
-app.delete('/api/logs', (req, res) => {
-  systemLogs = [];
-  saveLogs();
-  res.json({ success: true });
+app.delete('/api/blacklist/:number', async (req, res) => {
+  const { number } = req.params;
+  
+  if (BLACKLISTED_NUMBERS.includes(number)) {
+    await removeBlacklistFromFirestore(number);
+    return res.json({ success: true, message: 'Removed from blacklist' });
+  }
+  res.status(404).json({ success: false, message: 'Number not found in blacklist' });
+});
+
+app.delete('/api/logs', async (req, res) => {
+  // Clearing logs from Firestore is complex without a batch delete, we'll just return success for now or delete all docs in a batch.
+  // For simplicity:
+  try {
+    const batch = db.batch();
+    const snapshot = await db.collection('logs').get();
+    snapshot.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+    });
+    await batch.commit();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to clear logs' });
+  }
 });
 
 const PORT = 3001;

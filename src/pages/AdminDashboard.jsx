@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import FraudManagement from '../features/admin/components/FraudManagement';
 import DashboardStats from '../features/admin/components/DashboardStats';
 import ChatBox from '../features/chat/components/ChatBox';
+import FraudHeatmap from '../features/admin/components/FraudHeatmap';
+import PerformanceChart from '../features/admin/components/PerformanceChart';
+import StatusWidget from '../features/admin/components/StatusWidget';
 import './AdminDashboard.css';
 
 const AdminDashboard = () => {
@@ -71,34 +74,19 @@ const AdminDashboard = () => {
           <div className="content-scroll">
             {activeTab === 'overview' && (
               <div className="tab-content animate-fade-in">
-                <h2 className="content-title">Panel de Control General</h2>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
+                  <h2 className="content-title" style={{ marginBottom: 0 }}>Panel de Control General</h2>
+                  <StatusWidget />
+                </div>
                 <DashboardStats />
-                <div className="dashboard-grid">
+                <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
                   <div className="main-card glass-panel">
-                    <h3 className="card-title">Tendencia de Envíos</h3>
-                    <div className="chart-placeholder">
-                      <div className="bar-container">
-                        {[40, 70, 45, 90, 65, 85, 95].map((h, i) => (
-                          <div key={i} className="bar" style={{ height: `${h}%` }}></div>
-                        ))}
-                      </div>
-                      <div className="chart-labels">
-                        <span>LU</span><span>MA</span><span>MI</span><span>JU</span><span>VI</span><span>SA</span><span>DO</span>
-                      </div>
-                    </div>
+                    <h3 className="card-title">Rendimiento IA: Análisis de Mensajes</h3>
+                    <PerformanceChart />
                   </div>
                   <div className="side-card glass-panel">
-                    <h3 className="card-title">Actividad Reciente</h3>
-                    <div className="activity-list">
-                      <div className="activity-item">
-                        <span className="activity-time">Hace 2m</span>
-                        <p>Nuevo registro facial completado</p>
-                      </div>
-                      <div className="activity-item">
-                        <span className="activity-time">Hace 15m</span>
-                        <p>Envío #4823 entregado con éxito</p>
-                      </div>
-                    </div>
+                    <h3 className="card-title">Mapa de Calor: Focos de Fraude</h3>
+                    <FraudHeatmap />
                   </div>
                 </div>
               </div>
