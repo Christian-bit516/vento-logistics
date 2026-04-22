@@ -1,0 +1,18 @@
+[
+  {
+    "id": "1713560000000",
+    "timestamp": "2026-04-19T23:10:00.000Z",
+    "sender": "user",
+    "message": "Llámame al nueve ocho siete seis cinco cuatro tres dos uno",
+    "detectedNumber": "987654321",
+    "status": "INTERCEPTED"
+  },
+  {
+    "id": "1713560010000",
+    "timestamp": "2026-04-19T23:11:00.000Z",
+    "sender": "courier",
+    "message": "Hola, acepto tu oferta de S/15. Podemos coordinar.",
+    "detectedNumber": null,
+    "status": "CLEAN"
+  }
+]
