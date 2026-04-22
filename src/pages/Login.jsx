@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import AdvancedLoginForm from '../features/auth/components/AdvancedLoginForm';
 import './Login.css';
 
 const Login = () => {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handleMouseMove = (e) => {
@@ -18,6 +20,29 @@ const Login = () => {
 
   return (
     <div className="login-page">
+      <button 
+        onClick={() => navigate('/admin')}
+        style={{
+          position: 'absolute',
+          top: '20px',
+          right: '20px',
+          zIndex: 50,
+          background: 'rgba(34, 211, 238, 0.1)',
+          color: 'var(--secondary)',
+          border: '1px solid var(--secondary)',
+          padding: '8px 16px',
+          borderRadius: '8px',
+          cursor: 'pointer',
+          fontFamily: 'Outfit, sans-serif',
+          fontWeight: 'bold',
+          fontSize: '0.8rem',
+          letterSpacing: '1px',
+          boxShadow: '0 0 10px rgba(34, 211, 238, 0.2)'
+        }}
+      >
+        DEV BYPASS ➔
+      </button>
+
       <div 
         className="cyber-grid parallax-layer" 
         style={{ transform: `translate(${mousePos.x * 0.5}px, ${mousePos.y * 0.5}px)` }}
