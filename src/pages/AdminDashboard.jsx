@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import FraudManagement from '../features/admin/components/FraudManagement';
 import DashboardStats from '../features/admin/components/DashboardStats';
 import ChatBox from '../features/chat/components/ChatBox';
@@ -10,6 +11,7 @@ import './AdminDashboard.css';
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [simRole, setSimRole] = useState('user');
+  const navigate = useNavigate();
 
   return (
     <div className="admin-page">
@@ -53,7 +55,20 @@ const AdminDashboard = () => {
           </nav>
 
           <div className="sidebar-footer">
-            <div className="user-pill">
+            <div 
+              className="user-pill" 
+              onClick={() => navigate('/login')}
+              style={{ cursor: 'pointer', transition: 'all 0.2s ease' }}
+              title="Cerrar sesión"
+              onMouseOver={(e) => {
+                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                e.currentTarget.style.color = '#ef4444';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
+                e.currentTarget.style.color = 'var(--text-secondary)';
+              }}
+            >
               <div className="status-dot"></div>
               <span>Admin Logged In</span>
             </div>
