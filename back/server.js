@@ -268,8 +268,27 @@ app.post('/api/auth/login', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ADMIN API
 // ═══════════════════════════════════════════════════════════════════════════════
-app.get('/api/logs', (_req, res) => res.json(systemLogs));
-app.get('/api/blacklist', (_req, res) => res.json(BLACKLISTED_NUMBERS));
+
+// Health check — útil para verificar que el backend responde correctamente
+app.get('/api/health', (_req, res) => {
+  res.json({
+    status: 'ok',
+    firebase: firebaseReady ? 'connected' : 'local-memory',
+    logs: systemLogs.length,
+    blacklist: BLACKLISTED_NUMBERS.length,
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/api/logs', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json(systemLogs);
+});
+
+app.get('/api/blacklist', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json(BLACKLISTED_NUMBERS);
+});
 
 app.post('/api/blacklist', async (req, res) => {
   const { number } = req.body;
