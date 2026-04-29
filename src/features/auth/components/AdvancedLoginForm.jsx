@@ -90,7 +90,9 @@ const AdvancedLoginForm = () => {
       // 'no_face' → hook already reset status to 'ready', scanner will retry naturally
       if (result?.success) {
         // Auto-redirect to login after register success is shown for 3 s
-        // (user can also click the button manually)
+        setTimeout(() => {
+          switchTab('login');
+        }, 3000);
       }
     } else {
       const result = await loginFace(base64);

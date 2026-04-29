@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import API_URL_BASE from '../../../config/api';
 
 export const useBiometricAuth = () => {
   const [status, setStatus] = useState('idle'); // idle | loading_models | ready | processing | success | error | unrecognized
@@ -42,22 +43,6 @@ export const useBiometricAuth = () => {
 
   // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-  const getStoredUsers = () => {
-    const users = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith('vento_user_')) {
-        try {
-          const data = JSON.parse(localStorage.getItem(key));
-          if (data && data.descriptor) {
-            users.push({ key, data });
-          }
-        } catch (_) { /* ignore corrupt entries */ }
-      }
-    }
-    return users;
-  };
-
   const extractDescriptor = async (base64Image) => {
     const img = await window.faceapi.fetchImage(base64Image);
     const detection = await window.faceapi
@@ -65,22 +50,6 @@ export const useBiometricAuth = () => {
       .withFaceLandmarks()
       .withFaceDescriptor();
     return detection ? Array.from(detection.descriptor) : null;
-  };
-
-  const findBestMatch = (descriptor, users) => {
-    let bestDistance = Infinity;
-    let matchedKey = null;
-
-    const currentVec = new Float32Array(descriptor);
-    for (const { key, data } of users) {
-      const storedVec = new Float32Array(data.descriptor);
-      const dist = window.faceapi.euclideanDistance(storedVec, currentVec);
-      if (dist < bestDistance) {
-        bestDistance = dist;
-        matchedKey = key;
-      }
-    }
-    return { bestDistance, matchedKey };
   };
 
   // ─── Public Actions ───────────────────────────────────────────────────────────
@@ -106,26 +75,27 @@ export const useBiometricAuth = () => {
       const descriptor = await extractDescriptor(base64Image);
 
       if (!descriptor) {
-        // No face detected — reset to ready so scanner can retry
         setStatus('ready');
         return { success: false, reason: 'no_face' };
       }
 
-      // Check if face already exists
-      const users = getStoredUsers();
-      if (users.length > 0) {
-        const { bestDistance } = findBestMatch(descriptor, users);
-        if (bestDistance < 0.55) {
-          setStatus('error');
-          setErrorMsg('Este rostro ya está registrado en el sistema. Use Iniciar Sesión.');
-          return { success: false, reason: 'already_registered' };
-        }
-      }
+      // API Call to Backend (Railway)
+      const response = await fetch(`${API_URL_BASE}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: `User_${Date.now().toString().slice(-4)}`, // Default name
+          descriptor: descriptor
+        })
+      });
 
-      // Save new identity
-      const newId = `vento_user_${Date.now()}`;
-      localStorage.setItem(newId, JSON.stringify({ faceRegistered: true, descriptor }));
-      console.log(`[VentoAuth] New user registered: ${newId}`);
+      const result = await response.json();
+
+      if (!response.ok) {
+        setStatus('error');
+        setErrorMsg(result.message || 'Error al registrar.');
+        return { success: false, reason: result.reason || 'error' };
+      }
 
       setSuccessMode('register');
       setStatus('success');
@@ -135,7 +105,7 @@ export const useBiometricAuth = () => {
     } catch (err) {
       console.error('[VentoAuth] Register error', err);
       setStatus('error');
-      setErrorMsg('Error en el análisis biométrico. Intente de nuevo.');
+      setErrorMsg('Error de conexión con el servidor de seguridad.');
       return { success: false, reason: 'error' };
     }
   }, []);
@@ -158,33 +128,34 @@ export const useBiometricAuth = () => {
         return { success: false, reason: 'no_face' };
       }
 
-      const users = getStoredUsers();
+      // API Call to Backend (Railway)
+      const response = await fetch(`${API_URL_BASE}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ descriptor })
+      });
 
-      if (users.length === 0) {
+      const result = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          setStatus('unrecognized');
+          return { success: false, reason: 'unrecognized' };
+        }
         setStatus('error');
-        setErrorMsg('No hay usuarios registrados. Registrese primero en la pestaña "Registro".');
-        return { success: false, reason: 'no_users' };
+        setErrorMsg(result.message || 'Error al autenticar.');
+        return { success: false, reason: 'error' };
       }
-
-      const { bestDistance, matchedKey } = findBestMatch(descriptor, users);
-      console.log(`[VentoAuth] Best match distance: ${bestDistance.toFixed(4)} (key: ${matchedKey})`);
-
-      if (bestDistance > 0.55 || !matchedKey) {
-        setStatus('unrecognized');
-        return { success: false, reason: 'unrecognized' };
-      }
-
-      const matchPercent = Math.max(60, Math.min(99, Math.round((1 - bestDistance / 0.55) * 39) + 60));
 
       setSuccessMode('login');
       setStatus('success');
-      setConfidenceScore(matchPercent);
+      setConfidenceScore(result.matchPercent || 95);
       return { success: true };
 
     } catch (err) {
       console.error('[VentoAuth] Login error', err);
       setStatus('error');
-      setErrorMsg('Error en el análisis biométrico. Intente de nuevo.');
+      setErrorMsg('Error de conexión con el servidor de seguridad.');
       return { success: false, reason: 'error' };
     }
   }, []);

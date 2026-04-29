@@ -3,7 +3,9 @@ import { io } from 'socket.io-client';
 import ModerationAlert from './ModerationAlert';
 import './ChatBox.css';
 
-const SOCKET_URL = 'http://localhost:3001';
+import API_URL_BASE from '../../../config/api';
+
+const SOCKET_URL = API_URL_BASE;
 
 const ChatBox = ({ currentUserRole = 'user' }) => {
   const [messages, setMessages] = useState([]);

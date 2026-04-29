@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './FraudManagement.css';
 
-const API_URL = 'http://localhost:3001/api';
+import API_URL_BASE from '../../../config/api';
+
+const API_URL = `${API_URL_BASE}/api`;
 
 // --- Lógica de 'IA Feedback' ---
 // Expresión regular avanzada para detectar números camuflados (dígitos o palabras) con separadores
