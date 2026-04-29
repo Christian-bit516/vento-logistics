@@ -5,6 +5,7 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import admin from 'firebase-admin';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,25 +17,28 @@ app.use(express.json());
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: "http://localhost:5173",
+    origin: "*", // Permitir cualquier origen para Railway
     methods: ["GET", "POST"]
   }
 });
 
-import admin from 'firebase-admin';
-
 // Initialize Firebase Admin
+let serviceAccount;
 try {
-  const serviceAccount = JSON.parse(
-    fs.readFileSync(path.join(__dirname, 'back', 'serviceAccountKey.json'), 'utf8')
-  );
-
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  } else {
+    // Ahora que estamos dentro de /back, el archivo está en la misma carpeta
+    serviceAccount = JSON.parse(
+      fs.readFileSync(path.join(__dirname, 'serviceAccountKey.json'), 'utf8')
+    );
+  }
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
   });
-  console.log('Firebase Admin initialized successfully.');
+  console.log('✅ Firebase Admin initialized successfully.');
 } catch (error) {
-  console.error('Error initializing Firebase Admin:', error);
+  console.error('❌ Error initializing Firebase Admin:', error.message);
 }
 
 const db = admin.firestore();
@@ -180,8 +184,6 @@ app.delete('/api/blacklist/:number', async (req, res) => {
 });
 
 app.delete('/api/logs', async (req, res) => {
-  // Clearing logs from Firestore is complex without a batch delete, we'll just return success for now or delete all docs in a batch.
-  // For simplicity:
   try {
     const batch = db.batch();
     const snapshot = await db.collection('logs').get();
@@ -195,8 +197,7 @@ app.delete('/api/logs', async (req, res) => {
   }
 });
 
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 httpServer.listen(PORT, () => {
-  console.log(`\x1b[36m%s\x1b[0m`, `[Vento AI Core] Server running on http://localhost:${PORT}`);
+  console.log(`\x1b[36m%s\x1b[0m`, `🚀 [Vento AI Core] Server running on port ${PORT}`);
 });
-
