@@ -98,7 +98,7 @@ const AdvancedLoginForm = () => {
       const result = await loginFace(base64);
       if (result?.success) {
         // Give user 2 s to see the success screen before redirect
-        setTimeout(() => { window.location.href = '/chat'; }, 2500);
+        setTimeout(() => { window.location.href = '/admin'; }, 2500);
       }
       // 'no_face' → hook already reset to 'ready'
       // 'unrecognized' | 'error' | 'no_users' → hook set status accordingly
